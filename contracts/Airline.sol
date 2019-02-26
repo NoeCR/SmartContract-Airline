@@ -23,7 +23,7 @@ contract Airline {
     mapping(address => Flight[]) public customerFlights;
     mapping (address => uint) public customerTotalFlights;
     // evento para mostrar información al reservar un vuelo
-    event FlightPurchased(address indexed customer, uint price);
+    event FlightPurchased(address indexed customer, uint price, string flight);
     // Constructor donde establecemos el propietario y vuelos disponibles
     constructor() public {
         owner = msg.sender;
@@ -42,7 +42,7 @@ contract Airline {
         customerFlights[msg.sender].push(flight);
         customerTotalFlights[msg.sender] ++;
 
-       // FlightPurchased(msg.sender, flight.price);
+        FlightPurchased(msg.sender, flight.price, flight.name);
     }
     // Devuelve un entero positivo con la cantidad de vuelos del array flights
     function totalFlights() public view returns(uint){

@@ -3,6 +3,7 @@ import Panel from "./Panel";
 import getWeb3 from './getWeb3';
 import AirlineContract from './airline';
 import { AirlineService } from './airlineService';
+import { ToastContainer } from 'react-toastr';
 
 const converter = (web3) => {
     return (value) => {
@@ -17,7 +18,9 @@ export class App extends Component {
         this.state = {
             account: undefined,
             balance: 0,
-            flights: []
+            flights: [],
+            customerFlights: [],
+            refundableEther: 0
         }
     }
 
@@ -29,6 +32,26 @@ export class App extends Component {
         this.airlineService = new AirlineService(this.airline);
 
         var account = (await this.web3.eth.getAccounts())[0];
+
+        let flightPurchased =  this.airline.FlightPurchased();
+        flightPurchased.watch(function(err, result){
+            const { customer, price, flight } = result.args;
+            if(customer === this.state.account){
+                console.log(`You purchased a flight to ${flight} with a cost of ${price}`);
+            }else{
+                this.container.success(`Last customer purchased a flight to ${flight}
+                with a cost of ${price}`, 'Flight information');
+            }
+            
+        }.bind(this));
+      this.web3.currentProvider.publicConfigStore.on('update', async function(event){
+            this.setState({
+                account: event.selectedAddress.toLowerCase()
+            }, () => {
+                this.load();
+            });
+        }.bind(this));
+
         this.setState({
             account: account.toLowerCase()
         }, () => {
@@ -50,17 +73,37 @@ export class App extends Component {
         });
     }
 
+    async getRefundableEther(){
+        let refundableEther = this.toEther(await this.airlineService.getRefundableEther(this.state.account));
+        this.setState({
+            refundableEther
+        });
+    }
+
+    async refoundLoyaltyPoints() {
+        await this.airlineService.redeemLoyaltyPoints(this.state.account);
+    }
+
+    async getCustomerFlights(){
+        let customerFlights = await this.airlineService.getCustomerFlights(this.state.account);
+        this.setState({
+            customerFlights
+        });
+    }
     async buyFlight(flightIndex, flight){
        await this.airlineService.buyFlight(
            flightIndex, 
            this.state.account, 
            flight.price
         );
+        
     }
 
     async load(){
         this.getBalance();
         this.getFlights();
+        this.getCustomerFlights();
+        this.getRefundableEther();
     }
 
     render() {
@@ -78,7 +121,10 @@ export class App extends Component {
                 </div>
                 <div className="col-sm">
                     <Panel title="Loyalty points - refundable ether">
-
+                    <div className="p-1">
+                        <span><strong>Refundable: </strong>{this.state.refundableEther} eth</span>
+                        <button className="btn btn-sm btn-info float-right text-white" onClick={this.refoundLoyaltyPoints.bind(this)}>Refound</button>
+                    </div>
                     </Panel>
                 </div>
             </div>
@@ -87,7 +133,7 @@ export class App extends Component {
                     <Panel title="Available flights">
                         {this.state.flights.map((flight, i) => {
                             return <div className="p-1" key={i}>
-                                        <span>{flight.name} - cost: {this.toEther(flight.price)}</span>
+                                        <span>{flight.name} - cost: {this.toEther(flight.price)} Ethers</span>
                                         <button className="btn btn-sm btn-success float-right text-white" onClick={() => {this.buyFlight(i, flight)}}>Purchase</button>
                                     </div>
                         })}
@@ -95,10 +141,15 @@ export class App extends Component {
                 </div>
                 <div className="col-sm">
                     <Panel title="Your flights">
-
+                    {this.state.customerFlights.map((flight, i) => {
+                            return <div className="p-1" key={i}>
+                                        <span>{flight.name} - cost: {this.toEther(flight.price)}</span>
+                                    </div>
+                        })}
                     </Panel>
                 </div>
             </div>
+            <ToastContainer ref={(input) => { this.container = input}} className="toast-top-right" />
         </React.Fragment>
     }
 }
